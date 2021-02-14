@@ -6,5 +6,6 @@ current_dir 	:= src
 local_sources 	:= lib.c main.cpp
 local_libraries := -ldl
 
-$(eval $(call add-entry,exec,$(current_dir),$(local_sources),$(local_libraries)))
-$(eval $(call add-program,exec))
+#$(eval $(call add-entry,exec,$(current_dir),$(local_sources),$(local_libraries)))
+$(call add-entry,exec,$(current_dir),$(local_sources),$(local_libraries))
+$(call add-program,exec)

@@ -63,7 +63,7 @@ endif
 
 endef
 
-define add-entry
+define call-add-entry
 ifeq ($(origin $1_include_dirs), undefined)
 	$1_include_dirs :=
 	$1_output_dirs :=
@@ -84,7 +84,6 @@ $1_output_dirs += $(addprefix $(build_dir)/,$2)
 local_sources := $(addprefix $2/,$3)
 $1_sources += $$(local_sources)
 
-# odd, why doesn't local_sources show up like it should?
 $$(foreach n,$$(addprefix $2/,$3),\
 	$$(eval $$(call append-files,$1,$$(n))))
 
@@ -101,11 +100,7 @@ endef
 define add-rules
 local_object := $$(addprefix $(build_dir)/,$$(subst .c,.o,$$(subst .cpp,.o,$2)))
 
-ifeq ($(suffix $2),.c)
-	global_flags := CFLAGS
-else
-	global_flags := CXXFLAGS
-endif
+global_flags := $(if $(filter .c,$(suffix $2)), CXXFLAGS, CFLAGS)
 
 $$(local_object): $2
 	$3 $$($$(global_flags)) $4 -c $$^ -o $$@
@@ -119,7 +114,7 @@ $$(local_dependency): $2
 		$$($1_output_dirs),$4)
 endef
 
-define add-program
+define call-add-program
 $1 := $(build_dir)/$1
 programs += $$($1)
 
@@ -133,6 +128,14 @@ $$(foreach o,$$(c_sources),\
 	$$(eval $$(call add-rules,$1,$$(o),$$(CC),$$($1_cflags))))
 $$(foreach o,$$(cxx_sources),\
 	$$(eval $$(call add-rules,$1,$$(o),$$(CXX),$$($1_cxxflags))))
+endef
+
+define add-entry
+$(eval $(call call-add-entry,$1,$2,$3,$4))
+endef
+
+define add-program
+$(eval $(call call-add-program,$1))
 endef
 
 programs :=
@@ -158,6 +161,5 @@ lint: $(foreach t,$(notdir $(programs)),\
 tags:
 	@$(call make-tags)
 
-# why does this one now work?
 $(foreach n,$(programs),\
 	$(eval $(notdir $(n)): $(n)))
