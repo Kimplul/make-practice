@@ -1,0 +1,11 @@
++ Compile both C and C++ x
++ Run m4 files and be able to clean the output
++ Create multiple binaries x
++ Compile separate different binaries on command x
++ Create output into build dir x
++ Generate dependencies x
++ Generate tags files x
++ Compile syntax only x
++ Compile with debug info x
+
++ Possibly a separate ./configure stage?        x
