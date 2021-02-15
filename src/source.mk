@@ -9,3 +9,7 @@ local_libraries := -ldl
 #$(eval $(call add-entry,exec,$(current_dir),$(local_sources),$(local_libraries)))
 $(call add-entry,exec,$(current_dir),$(local_sources),$(local_libraries))
 $(call add-program,exec)
+
+%.c: %.m4
+	$(call add-to-cleanup,$@)
+	m4 $^ > $@

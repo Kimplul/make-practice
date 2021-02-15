@@ -2,6 +2,8 @@
 source_dir 	:= src
 configure	:= config.mk
 build_dir 	:= build
+cleanup		:=
+clean_file	:= cleanup
 
 CFLAGS = -Wall -Werror -Wextra
 CXXFLAGS = -Wall -Werror -Wextra
@@ -52,6 +54,8 @@ $(foreach n,$(notdir $(programs)),\
 
 $(foreach n,$(notdir $(programs)),\
 	$(if $($(n)_cxxfiles),$(call generate-tags,$($(n)_cxxfiles),$($(n)_cxxflags),--c++-kinds=+p --extras=+q)))
+
+$(call add-to-cleanup,tags)
 endef
 
 define append-files
@@ -97,6 +101,14 @@ $1_cxxflags += $$($1_cflags)
 $1_libraries += $4
 endef
 
+define add-to-cleanup
+	$(shell echo $1 >> $(clean_file))
+endef
+
+define sort-cleanfile
+	$(shell sort < $(clean_file) | uniq > output_$(clean_file); mv output_$(clean_file) $(clean_file))
+endef
+
 define add-rules
 local_object := $$(addprefix $(build_dir)/,$$(subst .c,.o,$$(subst .cpp,.o,$2)))
 
@@ -138,6 +150,12 @@ define add-program
 $(eval $(call call-add-program,$1))
 endef
 
+define prepare-cleanup
+$(call add-to-cleanup,$(build_dir))
+$(call add-to-cleanup,$(clean_file))
+$(call sort-cleanfile)
+endef
+
 programs :=
 dependencies :=
 include $(source_dir)/source.mk
@@ -146,7 +164,7 @@ include $(dependencies)
 all: $(programs)
 
 clean:
-	$(RM) -r $(build_dir)
+	xargs $(RM) -r < $(clean_file)
 
 debug: CFLAGS += -DDEBUG -g
 debug: CXXFLAGS += -DDEBUG -g
@@ -154,12 +172,11 @@ debug: all
 
 lint: CFLAGS += -fsyntax-only
 lint: CXXFLAGS += -fsyntax-only
-lint: $(foreach t,$(notdir $(programs)),\
-	$($(t)_objects))
+lint: $(foreach t,$(notdir $(programs)),$($(t)_objects))
 
 .PHONY: tags
 tags:
 	@$(call make-tags)
 
-$(foreach n,$(programs),\
-	$(eval $(notdir $(n)): $(n)))
+$(foreach n,$(programs),$(eval $(notdir $(n)): $(n)))
+$(call prepare-cleanup)

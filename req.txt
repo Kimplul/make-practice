@@ -1,5 +1,5 @@
 + Compile both C and C++ x
-+ Run m4 files and be able to clean the output
++ Run m4 files and be able to clean the output x
 + Create multiple binaries x
 + Compile separate different binaries on command x
 + Create output into build dir x
