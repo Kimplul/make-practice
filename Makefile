@@ -106,7 +106,8 @@ define add-to-cleanup
 endef
 
 define sort-cleanfile
-	$(shell sort < $(clean_file) | uniq > output_$(clean_file); mv output_$(clean_file) $(clean_file))
+	$(shell awk '!seen[$$0]++' $(clean_file) > /tmp/$(clean_file);\
+		mv /tmp/$(clean_file) $(clean_file))
 endef
 
 define add-rules
