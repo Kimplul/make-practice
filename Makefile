@@ -10,28 +10,22 @@ CXXFLAGS = -Wall -Werror -Wextra
 
 all:
 
--include $(configure)
 
-# $(call make-depend source-file,object-file,depend-file)
+# $(call make-depend $(source-file),$(object-file),$(depend-file))
 # mildly unfortunate that we have to always check if the directory exists,
 # as rules defined in "sources" are always run first
 # but otherwise alright implementation
 define make-depend
 @echo "Generating dependencies for $1"
-for dir in $4;					\
-do						\
-	if [ ! -d $$dir ];			\
-	then					\
-		mkdir -p $$dir;			\
-	fi					\
-done
+if [ ! -d $(dir $3) ];			\
+then					\
+	mkdir -p $(dir $3);			\
+fi					\
 
 echo -n "$3 " > $2 &&				\
 	gcc -MM 				\
 	-MP					\
-	$(CFLAGS)				\
-	$(CPPFLAGS)				\
-	$5					\
+	$4					\
 	$(TARGET_ARCH)				\
 	$1 >> $2
 endef
@@ -48,57 +42,26 @@ define generate-tags
 	ctags -L - -a --fields=+iaS $3;
 endef
 
-define make-tags
-$(foreach n,$(notdir $(programs)),\
-	$(if $($(n)_cfiles),$(call generate-tags,$($(n)_cfiles),$($(n)_cflags),--c-kinds=+p)))
+define generate-c-tags
+	$(call generate-tags,\
+		$(CFLAGS) $($1_$2_flags) $($1_flags),$2,--c-kinds=+p)
+endef
 
-$(foreach n,$(notdir $(programs)),\
-	$(if $($(n)_cxxfiles),$(call generate-tags,$($(n)_cxxfiles),$($(n)_cxxflags),--c++-kinds=+p --extras=+q)))
+define generate-cxx-tags
+	$(call generate-tags,\
+		$(CXXFLAGS) $($1_$2_flags) $($1_flags),$2,--c++-kinds=+p)
+endef
+
+define make-tags
+$(foreach program,$(notdir $(programs)),\
+	$(foreach source_file,$($(program)_sources),\
+		$(if $(filter .c,$(suffix $2)),\
+		$(call generate-cxx-tags,$(program),$(source_file)),\
+		$(call generate-c-tags,$(program),$(source_file)))
+	)
+)
 
 $(call add-to-cleanup,tags)
-endef
-
-define append-files
-ifeq ($(suffix $2),.c)
-	$1_cfiles += $2
-else
-	$1_cxxfiles += $2
-endif
-
-endef
-
-define call-add-entry
-ifeq ($(origin $1_include_dirs), undefined)
-	$1_include_dirs :=
-	$1_output_dirs :=
-	$1_sources :=
-	$1_objects :=
-	$1_cfiles :=
-	$1_cxxfiles :=
-	$1_cflags :=
-	$1_cxxflags :=
-	$1_libraries :=
-endif
-
-vpath % $2
-
-$1_include_dirs += $2
-$1_output_dirs += $(addprefix $(build_dir)/,$2)
-
-local_sources := $(addprefix $2/,$3)
-$1_sources += $$(local_sources)
-
-$$(foreach n,$$(addprefix $2/,$3),\
-	$$(eval $$(call append-files,$1,$$(n))))
-
-local_objects := $$(subst .c,.o,$$(subst .cpp,.o,$3))
-local_objects := $$(addprefix $(build_dir)/$2/,$$(local_objects))
-$1_objects += $$(local_objects)
-
-$1_cflags += $(addprefix -I ,$2)
-$1_cxxflags += $$($1_cflags)
-
-$1_libraries += $4
 endef
 
 define add-to-cleanup
@@ -110,45 +73,68 @@ define sort-cleanfile
 		mv /tmp/$(clean_file) $(clean_file))
 endef
 
-define add-rules
-local_object := $$(addprefix $(build_dir)/,$$(subst .c,.o,$$(subst .cpp,.o,$2)))
-
+# $(call add-single-rule,$(program),$(file),$(flags))
+define add-single-rule
+local_object := $(addprefix $(build_dir)/,$(subst $(suffix $2),.o,$2))
 global_flags := $(if $(filter .c,$(suffix $2)), CXXFLAGS, CFLAGS)
+local_compiler := $(if $(filter .c,$(suffix $2)), $(CXX), $(CC))
 
+$1_$2_flags := $3
 $$(local_object): $2
-	$3 $$($$(global_flags)) $4 -c $$^ -o $$@
+	$$(local_compiler) $$($(global_flags)) $$($1_flags) $$($1_$2_flags) $4 -c $$^ -o $$@
 
 local_dependency := $$(subst .o,.d,$$(local_object))
 dependencies += $$(local_dependency)
 
 $$(local_dependency): $2
 	@$$(call make-depend,\
-		$$^,$$@,$$(subst $$(suffix $2),.d,$2),\
-		$$($1_output_dirs),$4)
+		$$^,$$@,$(addprefix $(build_dir)/,$(subst $(suffix $2),.d,$2)),\
+		$$($(global_flags)) $$($1_flags) $$($1_$2_flags))
 endef
 
+define add-to-flags
+$1_$2_flags += $3
+endef
+
+# $(call add-rules,$(program),$(file),$(flags))
+define add-rules
+ifndef $1_$2_flags
+	$(call add-single-rule,$1,$2,$3)
+else
+	$(call add-to-flags,$1,$2,$3)
+endif
+endef
+
+# $(call call-add-entry,$(program),$(local_sources),$(include_dir),$(local_flags))
+define call-add-entry
+vpath % $3
+
+$1_sources += $(addprefix $3/,$2)
+
+$1_objects +=$(subst .c,.o,$(subst .cpp,.o,$(addprefix $(build_dir)/$3/,$2)))
+
+$(foreach source,$(addprefix $3/,$2),\
+	$(eval $(call add-rules,$1,$(source),$4)))
+endef
+
+# $(call call-add-program,$(program),$(linker_flags),$(global_flags))
 define call-add-program
 $1 := $(build_dir)/$1
+$1_flags := $3
 programs += $$($1)
 
 $$($1): $$($1_objects)
-	$(CXX) $$^ -o $$@ $$($1_libraries)
-
-c_sources := $$(filter %.c,$$($1_sources))
-cxx_sources := $$(filter %.cpp,$$($1_sources))
-
-$$(foreach o,$$(c_sources),\
-	$$(eval $$(call add-rules,$1,$$(o),$$(CC),$$($1_cflags))))
-$$(foreach o,$$(cxx_sources),\
-	$$(eval $$(call add-rules,$1,$$(o),$$(CXX),$$($1_cxxflags))))
+	$(CXX) $$^ -o $$@ $2
 endef
 
+# $(call add-entry,$(program),$(local_sources),$(dir_of_sources),$(flags))
 define add-entry
 $(eval $(call call-add-entry,$1,$2,$3,$4))
 endef
 
+# $(call add-progran,$(program),$(linker_flags),$(global_flags))
 define add-program
-$(eval $(call call-add-program,$1))
+$(eval $(call call-add-program,$1,$2,$3))
 endef
 
 define prepare-cleanup
@@ -156,6 +142,8 @@ $(call add-to-cleanup,$(build_dir))
 $(call add-to-cleanup,$(clean_file))
 $(call sort-cleanfile)
 endef
+
+-include $(configure)
 
 programs :=
 dependencies :=
@@ -177,7 +165,7 @@ lint: $(foreach t,$(notdir $(programs)),$($(t)_objects))
 
 .PHONY: tags
 tags:
-	@$(call make-tags)
+	$(call make-tags)
 
 $(foreach n,$(programs),$(eval $(notdir $(n)): $(n)))
 $(call prepare-cleanup)
