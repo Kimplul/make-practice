@@ -52,9 +52,7 @@ $(foreach program,$(notdir $(programs)),\
 	$(foreach source_file,$($(program)_sources_internal),\
 		$(if $(filter .c,$(suffix $2)),\
 		$(call generate-c-tags,$(program),$(source_file)),\
-		$(call generate-cxx-tags,$(program),$(source_file)))
-	)
-)
+		$(call generate-cxx-tags,$(program),$(source_file)))))
 
 $(call add-to-cleanup,tags)
 endef
@@ -71,15 +69,16 @@ endef
 # $(call add-single-rule,$(program),$(file),$(flags))
 define add-single-rule
 $(eval local_object := $(addprefix $(build_dir)/$1/,$(subst $(suffix $2),.o,$2)))
-$(eval global_flags_internal := $(if $(filter .c,$(suffix $2)), $$(CFLAGS), $$(CXXFLAGS)))
-$(eval local_compiler := $(if $(filter .c,$(suffix $2)), $$(CC), $$(CXX)))
+$(eval local_compiler := $(if $(filter .c,$(suffix $2)),CC,CXX))
 $(eval substitution := $(subst .,_,$1))
+$(eval global_flags_internal := $$(if $$(filter .c,$$(suffix $2)),CFLAGS,CXXFLAGS))
 
 $1_$2_defined := true
 $1_$2_flags_internal := $3
 
+
 $(local_object): $2
-	$(local_compiler) $$(global_flags_internal) $$($1_flags_internal)\
+	$$($(local_compiler)) $$($(global_flags_internal)) $$($1_flags_internal)\
 		$$($1_$2_flags_internal) $4 -c $2 -o $(local_object)
 
 $(eval local_dependency := $(subst .o,.d,$(local_object)))
@@ -88,7 +87,8 @@ $(eval dependencies += $(local_dependency))
 $(local_dependency): $2
 	@$$(call make-depend,\
 		$$^,$$@,$(addprefix $(build_dir)/$1/,$(subst $(suffix $2),.d,$2)),\
-		$$(global_flags_internal) $$($1_flags_internal) $$($1_$2_flags_internal))
+		$$($(global_flags_internal)) $$($1_flags_internal)\
+		$$($1_$2_flags_internal))
 endef
 
 define add-to-flags
