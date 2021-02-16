@@ -10,8 +10,7 @@ CXXFLAGS = -Wall -Werror -Wextra
 
 all:
 
-
-# $(call make-depend $(source-file),$(object-file),$(depend-file))
+# $(call make-depend $(source-file),$(object-file),$(depend-file),$(flags))
 # mildly unfortunate that we have to always check if the directory exists,
 # as rules defined in "sources" are always run first
 # but otherwise alright implementation
@@ -29,9 +28,6 @@ echo -n "$3 " > $2 &&				\
 	$(TARGET_ARCH)				\
 	$1 >> $2
 endef
-
-#$(build_dir)/%.d: %.c
-#	@$(call make-depend,$<,$@,$(subst .o,.d,$@))
 
 # cpp needs --extras=+q, c requires that it is left out
 define generate-tags
@@ -75,21 +71,21 @@ endef
 
 # $(call add-single-rule,$(program),$(file),$(flags))
 define add-single-rule
-local_object := $(addprefix $(build_dir)/,$(subst $(suffix $2),.o,$2))
-global_flags := $(if $(filter .c,$(suffix $2)), CXXFLAGS, CFLAGS)
-local_compiler := $(if $(filter .c,$(suffix $2)), $(CXX), $(CC))
+$(eval local_object := $(addprefix $(build_dir)/,$(subst $(suffix $2),.o,$2)))
+$(eval global_flags := $(if $(filter .c,$(suffix $2)), $$(CFLAGS), $$(CXXFLAGS)))
+$(eval local_compiler := $(if $(filter .c,$(suffix $2)), $$(CC), $$(CXX)))
 
 $1_$2_flags := $3
-$$(local_object): $2
-	$$(local_compiler) $$($(global_flags)) $$($1_flags) $$($1_$2_flags) $4 -c $$^ -o $$@
+$(local_object): $2
+	$(local_compiler) $$(global_flags) $$($1_flags) $$($1_$2_flags) $4 -c $$^ -o $$@
 
-local_dependency := $$(subst .o,.d,$$(local_object))
-dependencies += $$(local_dependency)
+$(eval local_dependency := $(subst .o,.d,$(local_object)))
+$(eval dependencies += $(local_dependency))
 
-$$(local_dependency): $2
+$(local_dependency): $2
 	@$$(call make-depend,\
 		$$^,$$@,$(addprefix $(build_dir)/,$(subst $(suffix $2),.d,$2)),\
-		$$($(global_flags)) $$($1_flags) $$($1_$2_flags))
+		$$(global_flags) $$($1_flags) $$($1_$2_flags))
 endef
 
 define add-to-flags
@@ -110,8 +106,7 @@ define call-add-entry
 vpath % $3
 
 $1_sources += $(addprefix $3/,$2)
-
-$1_objects +=$(subst .c,.o,$(subst .cpp,.o,$(addprefix $(build_dir)/$3/,$2)))
+$1_objects += $(subst .c,.o,$(subst .cpp,.o,$(addprefix $(build_dir)/$3/,$2)))
 
 $(foreach source,$(addprefix $3/,$2),\
 	$(eval $(call add-rules,$1,$(source),$4)))

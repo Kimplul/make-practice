@@ -5,6 +5,7 @@ include src/code2/source.mk
 include_dirs 	:= src
 local_sources 	:= lib.c main.cpp
 local_flags	:= -DALL
+exec_sources := lol
 
 $(call add-entry,exec,$(local_sources),$(include_dirs),$(local_flags))
 $(call add-entry,exec,main.cpp,$(include_dirs),-DSINGLE_FLAG)
