@@ -32,6 +32,7 @@ CFLAGS = -Wall -Werror -Wextra
 CXXFLAGS = -Wall -Werror -Wextra
 
 # Default rule, has to come before all other rules to be default.
+.PHONY: all
 all:
 
 
@@ -70,7 +71,6 @@ endef
 # 'Managing Projects with GNU Make, 3rd Edition' by Robert Mecklenburg, on p.
 # 149 and onward.
 define make-depend
-@echo "Generating dependencies for $1"
 if [ ! -d $(dir $3) ];				\
 then						\
 	mkdir -p $(dir $3);			\
@@ -87,7 +87,7 @@ endef
 # $(call generate-headers,$(flags),$(file),$(c_or_cxx_flags)),internal
 #
 # I like using Vim, and tags for the files I'm working is almost a
-# must at this point. This script generates ctags for all files that are
+# must at this point. This script generates a list of all files that are
 # included in the project, as well as the libraries that they use. I did not
 # come up with this script, I found it here:
 #
@@ -100,7 +100,7 @@ endef
 
 # $(call generate-c-headers,$(program),$(source)), internal
 #
-# Generate a list of C headers used in the project with the above macro
+# Generate a list of C files associated with this project.
 define generate-c-headers
 	$(shell $(call generate-headers,\
 		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
@@ -108,7 +108,7 @@ endef
 
 # $(call generate-cxx-tags,$(program),$(source)), internal
 #
-# Generate a list of C++ headers with the above macro
+# Generate a list of C++ files associated with this project.
 define generate-cxx-headers
 	$(shell $(call generate-headers,\
 		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
@@ -117,36 +117,25 @@ endef
 
 # $(call make-tags,$(c_header_files),$(cxx_header_files)), internal
 #
-# Entry point for creating the tags. In short, the programs and their associated
-# source files are looped through and depending on if the file is a C or C++
-# file, sent to the respective header extraction script.
+# Entry point for creating the tags. In short, for the given source files and
+# their arguments, pass them to ctags, which will generate a tags file that can
+# then be read from Vim or Emacs.
 #
 # In long, C headers are different from C++ headers, so we have to treat them
-# separately. This implementation creates a couple local variables that are
-# meant to store the list of headers for C and C++ files respectively. Each
-# source file is looped through, and the headers are stored in their respective
-# variables. Once all headers are accounted for, they're passed to ctags. Some
-# projects might not use C or C++, so one list may be empty. The if-statements
-# at the end of the macro is to guard from 'No input file specified'-errors from
-# ctags. Note the call to $(sort), in this case I'm using it to remove duplicates.
-# There are different methods to remove duplicates in a list in make, but I haven't seen
-# any test data that would show which one would be the quickest. Sorting does
-# add some overhead, but implementing the duplicate removal as a macro would
-# probably be slower than just sorting the list, since the sorting is done
-# straight in C, whereas any other implementation would have to be interpreted.
-#
-# Duplicate removal could also be implemented as running the list through awk like
-# in sort-cleanfile, but again, I'm not sure if it's worth it. More testing is needed.
+# separately. This implementation takes two arguments, that should
+# store the list of headers for C and C++ files respectively. 
+# Some projects might not use C or C++, so one list may be empty. The if-statements
+# at the end of the macro is to guard from 'No input file specified'-errors from ctags.
 #
 # At the end the generated tag file is marked for removal when `make clean` in
 # run. I prefer to pretty much nuke the whole repo back to the starting
 # position, and don't see removing the tag file at the same time as an issue,
 # but if this annoys you, just remove the call to add-to-cleanup.
 define make-tags
-$(if $2,\
-	ctags -a --c++-kinds=+p --extras=+q --fields=+iaS $2)
 $(if $1,\
 	ctags -a --c-kinds=+p --fields=+iaS $1)
+$(if $2,\
+	ctags -a --c++-kinds=+p --extras=+q --fields=+iaS $2)
 
 $(call add-to-cleanup,tags)
 endef
@@ -167,6 +156,12 @@ define sort-cleanfile
 endef
 
 # $(call add-single-rule,$(program),$(file),$(flags))
+#
+# Now we're getting into the core of this Makefile. This macro sets up rules for
+# the different files associated with a binary. The litany of evals at the start
+# are variables that are set up at parse time, essentially just to make writing
+# the rest of the macro easier. Everything could also be purely functionally
+# implemented, make is messy enough as is.
 define add-single-rule
 $(eval local_object := $(addprefix $(build_dir)/$1/,$(subst $(suffix $2),.o,$2)))
 $(eval local_compiler := $(if $(filter .c,$(suffix $2)),CC,CXX))
@@ -176,13 +171,13 @@ $(eval global_flags_internal := $$(if $$(filter .c,$$(suffix $2)),CFLAGS,CXXFLAG
 $1_$2_defined := true
 $1_$2_flags_internal := $3
 
-
 $(local_object): $2
 	$$($(local_compiler)) $$($(global_flags_internal)) $$($1_flags_internal)\
 		$$($1_$2_flags_internal) $4 -c $2 -o $(local_object)
 
-.PHONY: $(local_object).tags
 $(local_object).tags: $2
+	@echo Generating tags for $2
+	@touch $(local_object).tags
 	$(if $(filter .c,$(suffix $2)),\
 		$$(eval c_header_files += $$(call generate-c-headers,$1,$2)),\
 		$$(eval cxx_header_files += $$(call generate-cxx-headers,$1,$2)))
@@ -191,7 +186,8 @@ $(eval local_dependency := $(subst .o,.d,$(local_object)))
 $(eval dependencies += $(local_dependency))
 
 $(local_dependency): $2
-	@$$(call make-depend,\
+	@echo Generating dependencies for $2
+	$$(call make-depend,\
 		$$^,$$@,$(addprefix $(build_dir)/$1/,$(subst $(suffix $2),.d,$2)),\
 		$$($(global_flags_internal)) $$($1_flags_internal)\
 		$$($1_$2_flags_internal))
@@ -212,9 +208,11 @@ endef
 define call-add-entry
 vpath % $3
 
-$1_sources_internal := $$(sort $$($1_sources_internal) $(addprefix $3/,$2))
-$1_objects_internal := $$(sort $$($1_objects_internal) \
-	$(subst .c,.o,$(subst .cpp,.o,$(addprefix $(build_dir)/$1/$3/,$2))))
+$$(if $$($1_sources_internal),,$$(eval $1_sources_internal := ))
+$$(if $$($1_objects_internal),,$$(eval $1_objects_internal := ))
+
+$1_sources_internal += $(addprefix $3/,$2)
+$1_objects_internal += $(subst .c,.o,$(subst .cpp,.o,$(addprefix $(build_dir)/$1/$3/,$2)))
 
 $(foreach source,$(addprefix $3/,$2),\
 	$(eval $(call add-rules,$1,$(source),$4)))
@@ -226,8 +224,6 @@ $1 := $(build_dir)/$1/$1
 $1_flags_internal := $3
 programs += $$($1)
 
-$$($1).lint: $$($1_objects_internal)
-$$($1).tags: $$(addsuffix .tags,$$($1_objects_internal))
 $$($1): $$($1_objects_internal)
 ifeq ($(strip $4),)
 	$(CXX) $$^ -o $$@ $2
@@ -257,13 +253,20 @@ endef
 define prepare-tags
 $(eval c_header_files := )
 $(eval cxx_header_files := )
-$(foreach program,$(programs),$(program).tags)
+$(foreach program,$(notdir $(programs)),\
+	$(foreach object,$($(program)_objects_internal),\
+	$(object).tags))
+endef
+
+define prepare-lint
+$(foreach program,$(notdir $(programs)),\
+	$(foreach object,$($(program)_objects_internal),$(object)))
 endef
 
 define prepare-makefile
-$(foreach program,$(programs),\
+$(foreach program,$(notdir $(programs)),\
 	$(eval $(program)_sources_internal := $(sort $($(program)_sources_internal)))\
-	$(eval $(program)_objects_internal := $(sort $($(program)_sources_internal))))
+	$(eval $(program)_objects_internal := $(sort $($(program)_objects_internal))))
 $(foreach rule,$(programs),$(eval $(notdir $(rule)): $(rule)))
 endef
 
@@ -286,10 +289,9 @@ debug: all
 
 lint: CFLAGS += -fsyntax-only
 lint: CXXFLAGS += -fsyntax-only
-lint: $(addsuffix .lint,$(programs))
+lint: $(call prepare-lint)
 
-.PHONY: tags
-tags: $(call prepare-tags) 	
+tags: $(call prepare-tags)
 	@$(call make-tags,$(sort $(c_header_files)),$(sort $(cxx_header_files)))
 
 $(call prepare-makefile)
