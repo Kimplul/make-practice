@@ -44,7 +44,7 @@ exec_global_flags 	:= $(addprefix -I ,src src/code1 src/code2) $(EXTRA_FLAGS)
 # Inform make that exec should be compiled with these settings. The linker flags
 # are applied when linking, and the global flags are applied when compiling the
 # source files that will be included into this binary.
-$(call add-program,exec,$(linker_flags),$(exec_global_flags))
+$(call add-target,exec,$(linker_flags),$(exec_global_flags))
 
 # The framework allows some custom rules, such as in this example running files
 # through m4.

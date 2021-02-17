@@ -28,4 +28,4 @@ $(call add-entry,bin.a,../code1/code1.c,$(current_dir),-I src/code1 -DTEST)
 # Tell the framework that this binary should be compiled as a library. Note that
 # since the library flag is last, we have to provide non-values to all other
 # arguments besides the last one. Unfortunately a limitation of make itself.
-$(call add-program,bin.a,,,yes)
+$(call add-target,bin.a,,,static)
