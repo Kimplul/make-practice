@@ -17,9 +17,6 @@ configure	:= config.mk
 # Into which directory should the output of this Makefile be placed
 build_dir 	:= build
 
-# List of items that should be removed when running `make clean`.
-cleanup		:=
-
 # File that is used to store information about items to be removed. If you run
 # `make`, the build directory is generated. After that, if you run `make tags`,
 # a tags file will be generated. To remove both of these files at the same time,
@@ -96,29 +93,29 @@ endef
 #
 # https://www.topbug.net/blog/2012/03/17/generate-ctags-files-for-c-slash-c-plus-plus-source-files-and-all-of-their-included-header-files/
 define generate-headers
-	gcc -M $1 $2	 	|\
+	$(CXX) -M $1 $2	 	|\
 	sed -e 's/[\\ ]/\n/g' 	|\
 	sed -e '/^$$/d'	-e '/\.o:[ \t]*$$/d'
 endef
 
-# $(call generate-c-headers,$(flags),$(source)), internal
+# $(call generate-c-headers,$(program),$(source)), internal
 #
-# Generate C tags with the above macro
+# Generate a list of C headers used in the project with the above macro
 define generate-c-headers
-	$(call generate-headers,\
-		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2)
+	$(shell $(call generate-headers,\
+		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
 endef
 
-# $(call generate-cxx-tags,$(flags),$(source)), internal
+# $(call generate-cxx-tags,$(program),$(source)), internal
 #
-# Generate C++ tags with the above macro
+# Generate a list of C++ headers with the above macro
 define generate-cxx-headers
-	$(call generate-headers,\
-		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2)
+	$(shell $(call generate-headers,\
+		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
 endef
 
 
-# $(call make-tags), internal
+# $(call make-tags,$(c_header_files),$(cxx_header_files)), internal
 #
 # Entry point for creating the tags. In short, the programs and their associated
 # source files are looped through and depending on if the file is a C or C++
@@ -146,20 +143,10 @@ endef
 # position, and don't see removing the tag file at the same time as an issue,
 # but if this annoys you, just remove the call to add-to-cleanup.
 define make-tags
-$(eval c_header_files := )
-$(eval cxx_header_files := )
-$(foreach program,$(notdir $(programs)),\
-	$(foreach source_file,$($(program)_sources_internal),\
-		$(if $(filter .c,$(suffix $(source_file))),\
-		$(eval c_header_files += $(shell \
-			$(call generate-c-headers,$(program),$(source_file)))),\
-		$(eval cxx_header_files += $(shell \
-			$(call generate-cxx-headers,$(program),$(source_file)))))))
-
-$(if $(cxx_header_files),\
-	ctags -a --c++-kinds=+p --extras=+q --fields=+iaS $(sort $(cxx_header_files)))
-$(if $(c_header_files),\
-	ctags -a --c-kinds=+p --fields=+iaS $(sort $(c_header_files)))
+$(if $2,\
+	ctags -a --c++-kinds=+p --extras=+q --fields=+iaS $2)
+$(if $1,\
+	ctags -a --c-kinds=+p --fields=+iaS $1)
 
 $(call add-to-cleanup,tags)
 endef
@@ -193,6 +180,12 @@ $1_$2_flags_internal := $3
 $(local_object): $2
 	$$($(local_compiler)) $$($(global_flags_internal)) $$($1_flags_internal)\
 		$$($1_$2_flags_internal) $4 -c $2 -o $(local_object)
+
+.PHONY: $(local_object).tags
+$(local_object).tags: $2
+	$(if $(filter .c,$(suffix $2)),\
+		$$(eval c_header_files += $$(call generate-c-headers,$1,$2)),\
+		$$(eval cxx_header_files += $$(call generate-cxx-headers,$1,$2)))
 
 $(eval local_dependency := $(subst .o,.d,$(local_object)))
 $(eval dependencies += $(local_dependency))
@@ -233,15 +226,17 @@ $1 := $(build_dir)/$1/$1
 $1_flags_internal := $3
 programs += $$($1)
 
+$$($1).lint: $$($1_objects_internal)
+$$($1).tags: $$(addsuffix .tags,$$($1_objects_internal))
 $$($1): $$($1_objects_internal)
-ifeq ($4,)
+ifeq ($(strip $4),)
 	$(CXX) $$^ -o $$@ $2
 else
 	$(AR) rcs $$@ $$^
 endif
 endef
 
-# $(call add-entry,$(program),$(local_sources_internal),$(dir_of_sources_internal),$(flags))
+# $(call add-entry,$(program),$(local_sources),$(dir_of_sources),$(flags))
 define add-entry
 $(eval $(call call-add-entry,$1,$2,$3,$4))
 endef
@@ -251,10 +246,18 @@ define add-program
 $(eval $(call call-add-program,$1,$2,$3,$4))
 endef
 
+# $(call prepare-clenup)
 define prepare-cleanup
 $(call add-to-cleanup,$(build_dir))
 $(call add-to-cleanup,$(clean_file))
 $(call sort-cleanfile)
+endef
+
+# $(call prepare-tags)
+define prepare-tags
+$(eval c_header_files := )
+$(eval cxx_header_files := )
+$(foreach program,$(programs),$(program).tags)
 endef
 
 define prepare-makefile
@@ -272,7 +275,6 @@ include src/source.mk
 include $(dependencies)
 
 all: $(programs)
-	$(call prepare-cleanup)
 
 clean:
 	$(call prepare-cleanup)
@@ -284,12 +286,10 @@ debug: all
 
 lint: CFLAGS += -fsyntax-only
 lint: CXXFLAGS += -fsyntax-only
-lint: $(foreach t,$(notdir $(programs)),$($(t)_objects_internal))
-	$(call prepare-cleanup)
+lint: $(addsuffix .lint,$(programs))
 
 .PHONY: tags
-tags:
-	@$(call make-tags)
-	$(call prepare-cleanup)
+tags: $(call prepare-tags) 	
+	@$(call make-tags,$(sort $(c_header_files)),$(sort $(cxx_header_files)))
 
 $(call prepare-makefile)
