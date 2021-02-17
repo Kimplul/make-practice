@@ -96,13 +96,13 @@ echo -n "$3 " > $2 &&				\
 endef
 
 # $(call generate-headers,$(flags),$(file),$(c_or_cxx_flags)),internal
-#
-# I like using Vim, and tags for the files I'm working is almost a
-# must at this point. This script generates a list of all files that are
-# included in the project, as well as the libraries that they use. I did not
-# come up with this script, I found it here:
-#
-# https://www.topbug.net/blog/2012/03/17/generate-ctags-files-for-c-slash-c-plus-plus-source-files-and-all-of-their-included-header-files/
+#%
+#% I like using Vim, and tags for the files I'm working is almost a
+#% must at this point. This script generates a list of all files that are
+#% included in the project, as well as the libraries that they use. I did not
+#% come up with this script, I found it here:
+#%
+#% https://www.topbug.net/blog/2012/03/17/generate-ctags-files-for-c-slash-c-plus-plus-source-files-and-all-of-their-included-header-files/
 define generate-headers
 	$(CXX) -M $1 $2	 	|\
 	sed -e 's/[\\ ]/\n/g' 	|\
@@ -110,16 +110,16 @@ define generate-headers
 endef
 
 # $(call generate-c-headers,$(target),$(source)), internal
-#
-# Generate a list of C files associated with this project.
+#%
+#% Generate a list of C files associated with this project.
 define generate-c-headers
 	$(shell $(call generate-headers,\
 		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
 endef
 
 # $(call generate-cxx-tags,$(target),$(source)), internal
-#
-# Generate a list of C++ files associated with this project.
+#%
+#% Generate a list of C++ files associated with this project.
 define generate-cxx-headers
 	$(shell $(call generate-headers,\
 		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2))
@@ -127,21 +127,21 @@ endef
 
 
 # $(call make-tags,$(c_header_files),$(cxx_header_files)), internal
-#
-# Entry point for creating the tags. In short, for the given source files and
-# their arguments, pass them to ctags, which will generate a tags file that can
-# then be read from Vim or Emacs.
-#
-# In long, C headers are different from C++ headers, so we have to treat them
-# separately. This implementation takes two arguments, that should
-# store the list of headers for C and C++ files respectively. 
-# Some projects might not use C or C++, so one list may be empty. The if-statements
-# at the end of the macro is to guard from 'No input file specified'-errors from ctags.
-#
-# At the end the generated tag file is marked for removal when `make clean` in
-# run. I prefer to pretty much nuke the whole repo back to the starting
-# position, and don't see removing the tag file at the same time as an issue,
-# but if this annoys you, just remove the call to add-to-cleanup.
+#%
+#% Entry point for creating the tags. In short, for the given source files and
+#% their arguments, pass them to ctags, which will generate a tags file that can
+#% then be read from Vim or Emacs.
+#%
+#% In long, C headers are different from C++ headers, so we have to treat them
+#% separately. This implementation takes two arguments, that should
+#% store the list of headers for C and C++ files respectively. 
+#% Some projects might not use C or C++, so one list may be empty. The if-statements
+#% at the end of the macro is to guard from 'No input file specified'-errors from ctags.
+#%
+#% At the end the generated tag file is marked for removal when `make clean` in
+#% run. I prefer to pretty much nuke the whole repo back to the starting
+#% position, and don't see removing the tag file at the same time as an issue,
+#% but if this annoys you, just remove the call to add-to-cleanup.
 define make-tags
 $(if $1,\
 	ctags -a --c-kinds=+p --fields=+iaS $1)
@@ -152,15 +152,15 @@ $(call add-to-cleanup,tags)
 endef
 
 # $(call sort-cleanfile), internal
-#
-# Used for erasing possible duplicates in the cleanfile. 'sort' is arguably not
-# the most fitting name, but 'clean-cleanfile' sounded a bit ridiculous.
-#
-# Awk is a great language, and is the second fastest way to do this particular
-# task. The quickest one, according to my testing, was Perl, by about 2-3 times.
-# The difference between the two for a 500 Mib file was only approx. two seconds.
-# Perl is pretty much ubiquitous, but on the off chance that someone only has
-# coreutils installed, I went with awk, even though it is a bit slower.
+#% 
+#% Used for erasing possible duplicates in the cleanfile. 'sort' is arguably not
+#% the most fitting name, but 'clean-cleanfile' sounded a bit ridiculous.
+#%
+#% Awk is a great language, and is the second fastest way to do this particular
+#% task. The quickest one, according to my testing, was Perl, by about 2-3 times.
+#% The difference between the two for a 500 Mib file was only approx. two seconds.
+#% Perl is pretty much ubiquitous, but on the off chance that someone only has
+#% coreutils installed, I went with awk, even though it is a bit slower.
 define sort-cleanfile
 	$(shell awk '!seen[$$0]++' $(clean_file) > /tmp/$(clean_file);\
 		mv /tmp/$(clean_file) $(clean_file))
