@@ -7,6 +7,7 @@ class Why{
         public:
         void woooow(){};
 };
+
 int main(){
         print_world();
         return 1;

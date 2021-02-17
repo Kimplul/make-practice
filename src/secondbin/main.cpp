@@ -4,7 +4,7 @@ extern "C" {
 }
 
 int main(){
-        std::cout << "hawwo?" << std::endl;
+        std::cout << "christ" << std::endl;
         use_one();
         return 0;
 }
