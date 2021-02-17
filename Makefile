@@ -37,6 +37,16 @@ CXXFLAGS = -Wall -Werror -Wextra
 # Default rule, has to come before all other rules to be default.
 all:
 
+
+# $(call add-to-cleanup,$(item)), external
+#
+# This macro is used to inform the framework that some file is to be removed
+# when `make clean` is run. One example of when this comes in handy is in
+# src/source.mk, line 59.
+define add-to-cleanup
+	$(shell echo $1 >> $(clean_file))
+endef
+
 # $(call make-depend $(source-file),$(object-file),$(depend-file),$(flags))
 #
 # Generate a dependency file for a given source/object file combo. To some
@@ -77,68 +87,81 @@ echo -n "$3 " > $2 &&				\
 	$1 >> $2
 endef
 
-# $(call generate-tags,$(flags),$(file),$(c_or_cxx_flags)),internal
+# $(call generate-headers,$(flags),$(file),$(c_or_cxx_flags)),internal
 #
 # I like using Vim, and tags for the files I'm working is almost a
 # must at this point. This script generates ctags for all files that are
 # included in the project, as well as the libraries that they use. I did not
-# come up with this script, I'll add credits as soon as I find out where I got
-# it from.
+# come up with this script, I found it here:
 #
-# C++ needs --extras=+q, c requires that it is left out, otherwise we end up
-# with loads of anonymous structs etc., which is why I has to split this
-# function in twine. Both languages can still share a common tags file.
-define generate-tags
+# https://www.topbug.net/blog/2012/03/17/generate-ctags-files-for-c-slash-c-plus-plus-source-files-and-all-of-their-included-header-files/
+define generate-headers
 	gcc -M $1 $2	 	|\
 	sed -e 's/[\\ ]/\n/g' 	|\
-	sed -e '/^$$/d'		|\
-	sed -e '/\.o:[ \t]*$$/d'|\
-	ctags -L - -a --fields=+iaS $3;
+	sed -e '/^$$/d'	-e '/\.o:[ \t]*$$/d'
 endef
 
-# $(call generate-cxx-tags,$(program),$(source)), internal
+# $(call generate-c-headers,$(flags),$(source)), internal
 #
 # Generate C tags with the above macro
-define generate-c-tags
-	$(call generate-tags,\
-		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2,--c-kinds=+p)
+define generate-c-headers
+	$(call generate-headers,\
+		$(CFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2)
 endef
 
-# $(call generate-cxx-tags,$(program),$(source)), internal
+# $(call generate-cxx-tags,$(flags),$(source)), internal
 #
 # Generate C++ tags with the above macro
-define generate-cxx-tags
-	$(call generate-tags,\
-		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2,--c++-kinds=+p)
+define generate-cxx-headers
+	$(call generate-headers,\
+		$(CXXFLAGS) $($1_$2_flags_internal) $($1_flags_internal),$2)
 endef
+
 
 # $(call make-tags), internal
 #
 # Entry point for creating the tags. In short, the programs and their associated
 # source files are looped through and depending on if the file is a C or C++
-# file, sent to the respective tag generation script.
+# file, sent to the respective header extraction script.
+#
+# In long, C headers are different from C++ headers, so we have to treat them
+# separately. This implementation creates a couple local variables that are
+# meant to store the list of headers for C and C++ files respectively. Each
+# source file is looped through, and the headers are stored in their respective
+# variables. Once all headers are accounted for, they're passed to ctags. Some
+# projects might not use C or C++, so one list may be empty. The if-statements
+# at the end of the macro is to guard from 'No input file specified'-errors from
+# ctags. Note the call to $(sort), in this case I'm using it to remove duplicates.
+# There are different methods to remove duplicates in a list in make, but I haven't seen
+# any test data that would show which one would be the quickest. Sorting does
+# add some overhead, but implementing the duplicate removal as a macro would
+# probably be slower than just sorting the list, since the sorting is done
+# straight in C, whereas any other implementation would have to be interpreted.
+#
+# Duplicate removal could also be implemented as running the list through awk like
+# in sort-cleanfile, but again, I'm not sure if it's worth it. More testing is needed.
 #
 # At the end the generated tag file is marked for removal when `make clean` in
 # run. I prefer to pretty much nuke the whole repo back to the starting
 # position, and don't see removing the tag file at the same time as an issue,
 # but if this annoys you, just remove the call to add-to-cleanup.
 define make-tags
+$(eval c_header_files := )
+$(eval cxx_header_files := )
 $(foreach program,$(notdir $(programs)),\
 	$(foreach source_file,$($(program)_sources_internal),\
-		$(if $(filter .c,$(suffix $2)),\
-		$(call generate-c-tags,$(program),$(source_file)),\
-		$(call generate-cxx-tags,$(program),$(source_file)))))
+		$(if $(filter .c,$(suffix $(source_file))),\
+		$(eval c_header_files += $(shell \
+			$(call generate-c-headers,$(program),$(source_file)))),\
+		$(eval cxx_header_files += $(shell \
+			$(call generate-cxx-headers,$(program),$(source_file)))))))
+
+$(if $(cxx_header_files),\
+	ctags -a --c++-kinds=+p --extras=+q --fields=+iaS $(sort $(cxx_header_files)))
+$(if $(c_header_files),\
+	ctags -a --c-kinds=+p --fields=+iaS $(sort $(c_header_files)))
 
 $(call add-to-cleanup,tags)
-endef
-
-# $(call add-to-cleanup,$(item)), external
-#
-# This macro is used to inform the framework that some file is to be removed
-# when `make clean` is run. One example of when this comes in handy is in
-# src/source.mk, line 59.
-define add-to-cleanup
-	$(shell echo $1 >> $(clean_file))
 endef
 
 # $(call sort-cleanfile), internal
@@ -239,7 +262,6 @@ $(foreach program,$(programs),\
 	$(eval $(program)_sources_internal := $(sort $($(program)_sources_internal)))\
 	$(eval $(program)_objects_internal := $(sort $($(program)_sources_internal))))
 $(foreach rule,$(programs),$(eval $(notdir $(rule)): $(rule)))
-$(call prepare-cleanup)
 endef
 
 -include $(configure)
@@ -250,9 +272,11 @@ include src/source.mk
 include $(dependencies)
 
 all: $(programs)
+	$(call prepare-cleanup)
 
 clean:
-	xargs $(RM) -r < $(clean_file)
+	$(call prepare-cleanup)
+	xargs $(RM) -r -- < $(clean_file)
 
 debug: CFLAGS += -DDEBUG -g
 debug: CXXFLAGS += -DDEBUG -g
@@ -261,9 +285,11 @@ debug: all
 lint: CFLAGS += -fsyntax-only
 lint: CXXFLAGS += -fsyntax-only
 lint: $(foreach t,$(notdir $(programs)),$($(t)_objects_internal))
+	$(call prepare-cleanup)
 
 .PHONY: tags
 tags:
 	@$(call make-tags)
+	$(call prepare-cleanup)
 
 $(call prepare-makefile)
