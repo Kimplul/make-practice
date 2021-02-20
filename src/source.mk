@@ -18,6 +18,7 @@ local_flags	:= -DALL
 
 # Add lib.c and main.cpp to be compiled into the program exec,
 # and also inform make which flags should be applied to both of them.
+$(call add-entry,exec/wat,$(local_sources),$(current_dir),$(local_flags))
 $(call add-entry,exec,$(local_sources),$(current_dir),$(local_flags))
 
 # Add a flag to main.cpp, and only to main.cpp.
@@ -27,6 +28,7 @@ $(call add-entry,exec,$(local_sources),$(current_dir),$(local_flags))
 # have lots of different files that all require different flags, you can always
 # wrap this call in a macro:
 $(call add-entry,exec,main.cpp,$(current_dir),-DSINGLE_FLAG)
+$(call add-entry,exec/wat,main.cpp,$(current_dir),-DSINGLE_FLAG)
 
 # Prepare exec itself
 
@@ -45,6 +47,7 @@ exec_global_flags 	:= $(addprefix -I ,src src/code1 src/code2) $(EXTRA_FLAGS)
 # are applied when linking, and the global flags are applied when compiling the
 # source files that will be included into this binary.
 $(call add-target,exec,$(linker_flags),$(exec_global_flags))
+$(call add-target,exec/wat,$(linker_flags),$(exec_global_flags))
 
 # The framework allows some custom rules, such as in this example running files
 # through m4.

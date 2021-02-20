@@ -514,6 +514,11 @@ all: | $(targets)
 #% I sincerely doubt the cleanfile will ever grow large enough to cause any kind
 #% of noticable slowdown, but in case that does happen, you can always add
 #% prepare-cleanup to the end of 'all' or any rule, really.
+#%
+#% EDIT 20-02-2021: I looked it up and the behaviour of GNU coreutilz rm 8.32 is
+#% defined in the POSIX standard IF the -f flag is specified. As the actual content
+#% of $(RM) can vary depending on platform, i.e. some platforms can choose to omit
+#% the -f flag, I suggest keeping prepare-cleanup, but it's not strictly necessary.
 clean:
 	$(call prepare-cleanup)
 	xargs $(RM) -r -- < $(clean_file)
