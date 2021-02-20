@@ -1,5 +1,5 @@
 # `make` is fun
-This repo is for a pet project of mine, a `make` framework that aims to be as flexible and portable as possible, while sacrificing as little speed as possible.
+This repo is for a pet project of mine, a `make` framework that aims to be as flexible as possible, while sacrificing as little speed as possible.
 
 ## Features
 + Simple API. Just three calls!
