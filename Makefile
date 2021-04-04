@@ -486,8 +486,8 @@ include src/source.mk
 #%
 #% Note that in some cases dependencies will be generated when cleaning,
 #% and I found that to be somewhat annoying, so I added a simple check for not
-#% including dependencies when running debug.
-ifneq ($(MAKECMDGOALS),debug)
+#% including dependencies when running clean.
+ifneq ($(MAKECMDGOALS),clean)
 include $(dependencies)
 endif
 
