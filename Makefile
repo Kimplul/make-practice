@@ -33,8 +33,8 @@ clean_file	:= cleanup
 
 #% Global flags for C and C++. These are just my personal preferences, change as
 #% you see fit.
-CFLAGS = -Wall -Werror -Wextra
-CXXFLAGS = -Wall -Werror -Wextra
+CFLAGS = -Wall -Wextra
+CXXFLAGS = -Wall -Wextra
 
 #% Default rule, has to come before all other rules to be default.
 .PHONY: all
@@ -60,7 +60,7 @@ endef
 #% 
 #% Generate a dependency file for a given source/object file combo. To some
 #% extent the $(object-file) parameter is unnecessary, as we could just as well
-#% infer it from the source file, but in the future there may come situation
+#% infer it from the source file, but in the future there may come a situation
 #% where it's not possible.
 #%
 #% Mildly unfortunate that we have to always check if the directory exists,
@@ -88,11 +88,10 @@ then						\
 fi
 
 echo -n "$3 " > $2 &&				\
-	$(CXX) -MM 				\
-	-MP					\
-	$4					\
-	$(TARGET_ARCH)				\
-	$1 >> $2
+	$(CXX) -MM -MP				\
+	$4 $(TARGET_ARCH) $1 			\
+	| sed 's#\(.*\)\.o#$(dir $3)\1.o#g'	\
+	>> $2
 endef
 
 # $(call generate-headers,$(flags),$(file),$(c_or_cxx_flags)),internal
@@ -307,9 +306,9 @@ endef
 #% whatever target we're creating, and we set its value to the output file that
 #% we want to generate. Note that this makefile places binaries in folders named
 #% after the targets, this is because it makes separating build rules for
-#% different targets massively. Some projects place their targets in the
+#% different targets massively simpler. Some projects place their targets in the
 #% top directory of their $(build_dir), but ar gets confused if there is a
-#% folder by the same name as the library that's its trying to create, which
+#% folder by the same name as the library thats it's trying to create, which
 #% isn't preferable.
 #%
 #% Note that there isn't an explicit way to specify if a target should be
@@ -369,7 +368,7 @@ define add-entry
 $(eval $(call call-add-entry,$1,$2,$3,$4))
 endef
 
-# $(call add-progran,$(target),$(linker_flags),$(global_flags),$(library)),
+# $(call add-target,$(target),$(linker_flags),$(global_flags),$(library)),
 # external
 #%
 #% Second external public API call. As with call-add-entry, purely cosmetics.
@@ -377,23 +376,23 @@ endef
 #% This macro should only be called once per target, and one call per target.
 #%
 #% The arguments are:
-#% $(target)		- The target that should be created. Note that this is
-#% 			  not a list, just a singular name. make won't stop you
-#% 			  from prividing a list, but it's undefined behaviour,
-#% 			  and should be avoided.
-#%
-#% $(linker_flags)	- Flags that should be passed to the linker, if
-#% 			  applicable.
-#%
-#% $(global_flags)	- Global flags that should be added to all files that
-#% 			  are being compiled under this target. The same
-#% 			  behaviour could be achieved with add-entry, but this
-#% 			  is more convenient.
-#%
-#% $(library)		- Flag if this 'target' should actually be compiled
-#% 			  into a library. Valid values are 'shared' and
-#% 			  'static', anything else (including no value) will be
-#% 			  treated as a typical executable.
+# $(target)		- The target that should be created. Note that this is
+# 			  not a list, just a singular name. make won't stop you
+# 			  from prividing a list, but it's undefined behaviour,
+# 			  and should be avoided.
+#
+# $(linker_flags)	- Flags that should be passed to the linker, if
+# 			  applicable.
+#
+# $(global_flags)	- Global flags that should be added to all files that
+# 			  are being compiled under this target. The same
+# 			  behaviour could be achieved with add-entry, but this
+# 			  is more convenient.
+#
+# $(library)		- Flag if this 'target' should actually be compiled
+# 			  into a library. Valid values are 'shared' and
+# 			  'static', anything else (including no value) will be
+# 			  treated as a typical executable.
 define add-target
 $(eval $(call call-add-target,$1,$2,$3,$4))
 endef
@@ -486,9 +485,9 @@ include src/source.mk
 #%
 #% Note that in some cases dependencies will be generated when cleaning,
 #% and I found that to be somewhat annoying, so I added a simple check for not
-#% including dependencies when running clean.
+#% including dependencies when running clean
 ifneq ($(MAKECMDGOALS),clean)
-include $(dependencies)
+-include $(dependencies)
 endif
 
 #% Our first 'real' rule: all. This is the default rule, and will be executed
